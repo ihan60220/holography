@@ -35,7 +35,7 @@ def geodesic_derivatives(x, state, r_star, mass_func, dm_dv_func):
         
     return [rp, vp, rpp, vpp]
 
-def map_to_normal_time(v_array, r_array, m_func):
+def map_to_normal_time(v_array, r_array, m_func): # still don't understand
     t_array = np.zeros_like(v_array)
     for i in range(len(v_array)):
         v, r, m_val = v_array[i], r_array[i], m_func(v_array[i])
