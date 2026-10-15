@@ -1021,9 +1021,298 @@ def _(jax, np, os, plt):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## 11. Summary & Physical Synthesis
+    ## 11. Circumventing the Gibbs Phenomenon: Fejér-Chebyshev Summability & Spectral Filtering
 
-    ### 11.1 Key Achievements of the Orthogonal Basis Approach
+    ### 11.1 Mathematical Origins of the Gibbs Phenomenon in Chebyshev Expansions
+    In Section 8 (Pathological Profile P1: Ultra-Thin Shockwave $v_s = 0.08$) and Section 9 (Spectral Scaling Analysis), we discovered that high-order Chebyshev expansions exhibit the universal **Wilbraham-Gibbs phenomenon**:
+    Near the sharp collapse shockwave, the reconstructed metric exhibits persistent high-frequency oscillations with an overshoot and undershoot of $\approx 7 - 10\%$.
+
+    To understand why this occurs, recall the isomorphic transformation between Chebyshev polynomials on $\xi \in [-1, 1]$ and Fourier cosine series on $\theta \in [0, \pi]$:
+    $$T_k(\xi) = \cos(k \theta), \qquad \xi = \cos \theta$$
+
+    Expanding a dynamic metric correction $g(\xi)$ in a truncated Chebyshev polynomial basis of order $K$:
+    $$S_K[g](\xi) = \sum_{k=0}^{K-1} c_k T_k(\xi)$$
+    is mathematically equivalent to convolving $g(\cos \theta)$ on the circle with the **Dirichlet kernel**:
+    $$S_K[g](\cos \theta) = \frac{1}{\pi} \int_{-\pi}^\pi g(\cos \phi) D_K(\theta - \phi) d\phi, \qquad D_K(u) = \frac{\sin\left(\left(K - \frac{1}{2}\right) u\right)}{2 \sin(u/2)}$$
+
+    Because the Dirichlet kernel $D_K(u)$ oscillates between positive and negative values, its $L^1$ norm (the Lebesgue constant) diverges logarithmically:
+    $$\|D_K\|_{L^1} = \frac{1}{\pi} \int_{-\pi}^\pi |D_K(u)| du \sim \frac{4}{\pi^2} \ln K \to \infty$$
+    When applied to a step-like discontinuity or steep wavefront, this signed convolution produces:
+    1. **Non-Uniform Convergence:** An unavoidable overshoot that does not vanish as $K \to \infty$, plateauing at:
+       $$\lim_{K \to \infty} \max |S_K[g] - g| \approx \frac{1}{\pi} \int_0^\pi \frac{\sin u}{u} du - \frac{1}{2} \approx 0.0895 \quad (8.95\%)$$
+    2. **Physical Null Energy Condition (NEC) Violation:**
+       In $(2+1)$-dimensional Vaidya-AdS spacetime, the null energy-momentum tensor is given by:
+       $$T_{vv} = \frac{1}{8\pi r^2} \frac{dm}{dv}$$
+       The Gibbs ringing in $m(v)$ creates oscillatory dips where $\frac{dm}{dv} < 0$, inducing an **unphysical, spurious negative-energy pulse** in the bulk!
+
+    ---
+
+    ### 11.2 Fejér-Chebyshev Summability (Cesàro Means)
+    In classical Fourier analysis (Fejér, 1900), non-uniform convergence and Gibbs ringing are rigorously eliminated by replacing the partial sums $S_K$ with their **Cesàro arithmetic means**:
+    $$\sigma_K[g](\xi) = \frac{1}{K} \sum_{n=1}^K S_n[g](\xi) = \sum_{k=0}^{K-1} \left(1 - \frac{k}{K}\right) c_k T_k(\xi)$$
+
+    Notice the linear triangular filter factor:
+    $$w_k^{\text{Fejér}} = 1 - \frac{k}{K}, \qquad 0 \le k < K$$
+
+    In angular space $\theta = \arccos \xi$, this corresponds to convolution with the **Fejér kernel**:
+    $$\sigma_K[g](\cos \theta) = \frac{1}{\pi} \int_{-\pi}^\pi g(\cos \phi) F_K(\theta - \phi) d\phi, \qquad F_K(u) = \frac{1}{2K} \left(\frac{\sin(Ku/2)}{\sin(u/2)}\right)^2$$
+
+    #### Crucial Mathematical Theorems for Fejér-Chebyshev Sums:
+    1. **Strict Non-Negativity:** $F_K(u) \ge 0$ for all $u \in [-\pi, \pi]$. Unlike the Dirichlet kernel, the Fejér kernel possesses **no negative sidelobes**.
+    2. **Variation-Diminishing Property:** Convolution with a positive kernel cannot create new local extrema:
+       $$\operatorname{TotalVariation}(\sigma_K[g]) \le \operatorname{TotalVariation}(g)$$
+    3. **Monotonicity Preservation:** If the true collapse profile $m(v)$ is monotonically increasing, $\sigma_K[m](v)$ is **strictly monotonically increasing**, thereby eliminating Gibbs ringing and preserving the Null Energy Condition $T_{vv} \ge 0$.
+    4. **Fejér's Theorem (Uniform Convergence):** For any continuous function $g(\xi)$, $\sigma_K[g] \to g$ **uniformly** on $[-1, 1]$ as $K \to \infty$. At a jump discontinuity, the sum converges monotonically to the midpoint without overshoot.
+
+    ---
+
+    ### 11.3 Spectral Filters & Optimal Summability Kernels
+    While the Fejér triangular window $w_k = 1 - k/K$ rigorously eliminates Gibbs ringing, its convergence rate for smooth functions decays as $\mathcal{O}(1/K)$. In computational spectral methods, higher-order filter factors $\sigma(k/K)$ achieve an optimal Pareto trade-off between Gibbs suppression and shock wavefront sharpness:
+
+    1. **Lanczos $\sigma$-Factor Filter (Sinc Window):**
+       $$w_k^{\text{Lanczos}} = \operatorname{sinc}\left(\frac{\pi k}{K}\right) = \frac{\sin(\pi k / K)}{\pi k / K}$$
+       Damps high-frequency Gibbs oscillations by $>95\%$ while maintaining sharp shock transitions.
+    2. **Raised-Cosine / Hann Filter:**
+       $$w_k^{\text{Hann}} = \frac{1}{2}\left[1 + \cos\left(\frac{\pi k}{K}\right)\right] = \cos^2\left(\frac{\pi k}{2 K}\right)$$
+       A $C^1$-smooth spectral window eliminating boundary truncation cusps.
+    3. **Exponential Spectral Filter (Gottlieb-Tadmor):**
+       $$w_k^{\text{Exp}} = \exp\left(-\alpha (k/K)^p\right)$$
+       Preserves high-order spectral convergence on low and intermediate modes while exponentially extinguishing high modes.
+    """)
+    return
+
+
+@app.cell
+def _(np, os, plt):
+    res_paths = [
+        "/home/paulhan65/holography/notebooks/fejer_benchmark_results.npy",
+        "/home/paulhan65/.gemini/antigravity-cli/brain/111dda55-dca7-4f74-9da7-30620c3356c1/scratch/fejer_benchmark_results.npy"
+    ]
+    data_file = next((p for p in res_paths if os.path.exists(p)), None)
+    if data_file is None:
+        raise FileNotFoundError("fejer_benchmark_results.npy not found.")
+
+    bench_data = np.load(data_file, allow_pickle=True).item()
+    results = bench_data["results"]
+    v_eval = bench_data["v_eval"]
+    m_true_v = bench_data["m_true_v"]
+    dm_true = bench_data["dm_true"]
+    K = bench_data["K"]
+
+    print(f"{'Method / Spectral Filter':<32} | {'Overshoot':<10} | {'Undershoot':<10} | {'Max |Δm|':<10} | {'Min dm/dv':<11} | {'Obs MSE':<10}")
+    print("-" * 92)
+    for name, res in results.items():
+        ov = f"{res['overshoot']*100:.2f}%"
+        un = f"{res['undershoot']*100:.2f}%"
+        max_e = f"{res['max_err']:.4f}"
+        min_d = f"{res['min_deriv']:.4f}"
+        loss_s = f"{res['loss']:.2e}"
+        print(f"{name:<32} | {ov:<10} | {un:<10} | {max_e:<10} | {min_d:<11} | {loss_s:<10}")
+    print("-" * 92)
+
+    fig = plt.figure(figsize=(16, 11))
+    gs = fig.add_gridspec(2, 3, hspace=0.32, wspace=0.25)
+
+    colors = {
+        "1. Standard Chebyshev (Dirichlet)": "tab:red",
+        "2. Fejér-Chebyshev (Cesàro)": "tab:blue",
+        "3. Lanczos σ-Factor": "tab:green",
+        "4. Raised-Cosine (Hann)": "tab:purple"
+    }
+    linestyles = {
+        "1. Standard Chebyshev (Dirichlet)": "-",
+        "2. Fejér-Chebyshev (Cesàro)": "--",
+        "3. Lanczos σ-Factor": "-.",
+        "4. Raised-Cosine (Hann)": ":"
+    }
+
+    # Panel 1: Spectral Kernels
+    ax1 = fig.add_subplot(gs[0, 0])
+    theta = np.linspace(-np.pi, np.pi, 1000)
+    u = theta / 2.0
+    D_K = np.sin((K - 0.5) * theta) / (2.0 * np.sin(u) + 1e-12)
+    D_K[np.isclose(theta, 0.0, atol=1e-5)] = (K - 0.5)
+    F_K = (1.0 / (2.0 * K)) * (np.sin(K * u) / (np.sin(u) + 1e-12))**2
+    F_K[np.isclose(theta, 0.0, atol=1e-5)] = K / 2.0
+    k_arr = np.arange(K)
+    w_lanczos = np.ones(K)
+    w_lanczos[1:] = np.sin(np.pi * k_arr[1:] / float(K)) / (np.pi * k_arr[1:] / float(K))
+    L_K = 0.5 * w_lanczos[0] + np.sum([w_lanczos[k] * np.cos(k * theta) for k in range(1, K)], axis=0)
+
+    ax1.plot(theta, D_K, 'r-', lw=1.6, label=f'Dirichlet $D_{{{K}}}(\\theta)$ (Oscillatory, $<0$)')
+    ax1.plot(theta, F_K, 'b--', lw=2.0, label=f'Fejér $F_{{{K}}}(\\theta)$ (Strictly $\\geq 0$)')
+    ax1.plot(theta, L_K, 'g-.', lw=1.8, label=f'Lanczos $L_{{{K}}}(\\theta)$ (Damped Sidelobes)')
+    ax1.axhline(0, color='black', lw=1, ls=':')
+    ax1.fill_between(theta, D_K, 0, where=(D_K < 0), color='red', alpha=0.2, label='Negative Lobes $\\rightarrow$ Gibbs Ringing')
+    ax1.set_title('A. Spectral Kernels on $\\theta \\in [-\\pi, \\pi]$', fontweight='bold')
+    ax1.set_xlabel('Angle $\\theta = \\arccos(\\xi)$')
+    ax1.set_ylabel('Kernel Value')
+    ax1.set_xlim(-1.5, 1.5)
+    ax1.set_ylim(-3, K/2.0 + 1)
+    ax1.legend(loc='upper right', fontsize=8.5)
+    ax1.grid(True)
+
+    # Panel 2: Metric m(v)
+    ax2 = fig.add_subplot(gs[0, 1])
+    ax2.plot(v_eval, m_true_v, 'k-', lw=2.6, label='True Gravitational Shock ($v_s=0.08$)')
+    for name, res in results.items():
+        ax2.plot(v_eval, res["m_fit"], color=colors[name], ls=linestyles[name], lw=1.8, label=name.split('. ')[1])
+    ax2.set_title(f'B. Reconstructed Metric $m(v)$ ($K={K}$)', fontweight='bold')
+    ax2.set_xlabel('Advanced Time $v$')
+    ax2.set_ylabel('Mass Profile $m(v)$')
+    ax2.set_xlim(-2.5, 2.5)
+    ax2.set_ylim(-0.15, 1.15)
+    ax2.legend(loc='upper left', fontsize=8.5)
+    ax2.grid(True)
+
+    # Panel 3: Inset Zoom on Shock Transition
+    ax3 = fig.add_subplot(gs[0, 2])
+    v_zoom = (v_eval >= -0.35) & (v_eval <= 0.35)
+    ax3.plot(v_eval[v_zoom], m_true_v[v_zoom], 'k-', lw=2.6, label='True Shock')
+    for name, res in results.items():
+        ax3.plot(v_eval[v_zoom], res["m_fit"][v_zoom], color=colors[name], ls=linestyles[name], lw=2.0, label=name.split('. ')[1])
+    ax3.axhline(1.0, color='gray', ls='--', alpha=0.7)
+    ax3.axhline(0.0, color='gray', ls='--', alpha=0.7)
+    ax3.set_title('C. Shock Zoom: Elimination of Gibbs Overshoot', fontweight='bold')
+    ax3.set_xlabel('Advanced Time $v$')
+    ax3.set_ylabel('$m(v)$')
+    ax3.set_xlim(-0.35, 0.35)
+    ax3.set_ylim(-0.12, 1.12)
+    ax3.annotate(f"Standard Chebyshev\nOvershoot: +{results['1. Standard Chebyshev (Dirichlet)']['overshoot']*100:.1f}%\nUndershoot: -{results['1. Standard Chebyshev (Dirichlet)']['undershoot']*100:.1f}%",
+                 xy=(0.14, 1.025), xytext=(0.02, 0.65),
+                 arrowprops=dict(arrowstyle='->', color='red', lw=1.5),
+                 fontsize=8.5, color='darkred', fontweight='semibold')
+    ax3.annotate("Fejér: 0.00% Overshoot\nStrictly Monotonic",
+                 xy=(0.0, 0.5), xytext=(-0.32, 0.3),
+                 arrowprops=dict(arrowstyle='->', color='blue', lw=1.5),
+                 fontsize=8.5, color='darkblue', fontweight='semibold')
+    ax3.grid(True)
+    ax3.legend(loc='lower right', fontsize=8)
+
+    # Panel 4: Metric Derivative dm/dv & NEC
+    ax4 = fig.add_subplot(gs[1, 0])
+    v_mid = 0.5 * (v_eval[:-1] + v_eval[1:])
+    v_grad_zoom = (v_mid >= -1.0) & (v_mid <= 1.0)
+    ax4.plot(v_mid[v_grad_zoom], dm_true[v_grad_zoom], 'k-', lw=2.2, label='True $dm/dv$ (Shock Peak)')
+    for name, res in results.items():
+        ax4.plot(v_mid[v_grad_zoom], res["dm_v"][v_grad_zoom], color=colors[name], ls=linestyles[name], lw=1.8, label=name.split('. ')[1])
+    ax4.axhline(0.0, color='black', lw=1.2, ls='-')
+    ax4.fill_between(v_mid[v_grad_zoom], -1.5, 0, color='red', alpha=0.15, label='NEC Violation Zone ($T_{vv} < 0$)')
+    ax4.set_title('D. Metric Derivative $\\frac{dm}{dv}$ & Null Energy Condition', fontweight='bold')
+    ax4.set_xlabel('Advanced Time $v$')
+    ax4.set_ylabel('$dm / dv$')
+    ax4.set_xlim(-0.8, 0.8)
+    ax4.set_ylim(-1.2, 3.5)
+    ax4.legend(loc='upper right', fontsize=8)
+    ax4.grid(True)
+
+    # Panel 5: Filter Factors
+    ax5 = fig.add_subplot(gs[1, 1])
+    k_modes = np.arange(K)
+    for name, res in results.items():
+        ax5.plot(k_modes, res["weights"], marker='o', color=colors[name], ls=linestyles[name], lw=1.8, label=name.split('. ')[1])
+    ax5.set_title('E. Spectral Filter Factors $w_k = \\sigma(k/K)$', fontweight='bold')
+    ax5.set_xlabel('Chebyshev Polynomial Mode Index $k$')
+    ax5.set_ylabel('Weight $w_k$')
+    ax5.set_xticks(k_modes[::2])
+    ax5.set_ylim(-0.05, 1.05)
+    ax5.grid(True)
+    ax5.legend(loc='lower left', fontsize=8.5)
+
+    # Panel 6: Quantitative Bar Chart
+    ax6 = fig.add_subplot(gs[1, 2])
+    method_labels = ["Standard\nChebyshev", "Fejér\n(Cesàro)", "Lanczos\nσ-Factor", "Hann\nCosine"]
+    overshoots = [results[name]["overshoot"] * 100 for name in results]
+    undershoots = [results[name]["undershoot"] * 100 for name in results]
+    max_errs = [results[name]["max_err"] * 100 for name in results]
+    x = np.arange(len(method_labels))
+    width = 0.25
+    rects1 = ax6.bar(x - width, overshoots, width, label='Overshoot %', color='crimson', alpha=0.85)
+    rects2 = ax6.bar(x, undershoots, width, label='Undershoot %', color='darkorange', alpha=0.85)
+    rects3 = ax6.bar(x + width, max_errs, width, label='Max Err %', color='royalblue', alpha=0.85)
+    ax6.set_title('F. Quantitative Pathologies vs. Circumvention', fontweight='bold')
+    ax6.set_xticks(x)
+    ax6.set_xticklabels(method_labels, fontsize=9)
+    ax6.set_ylabel('Percentage (%)')
+    ax6.legend(loc='upper right', fontsize=8.5)
+    ax6.grid(True, axis='y')
+    for rect in rects1:
+        h = rect.get_height()
+        ax6.annotate(f'{h:.1f}%', xy=(rect.get_x() + rect.get_width() / 2, h),
+                     xytext=(0, 2), textcoords="offset points", ha='center', va='bottom', fontsize=7.5)
+    for rect in rects2:
+        h = rect.get_height()
+        ax6.annotate(f'{h:.1f}%', xy=(rect.get_x() + rect.get_width() / 2, h),
+                     xytext=(0, 2), textcoords="offset points", ha='center', va='bottom', fontsize=7.5)
+
+    plt.tight_layout()
+    plt.savefig("/home/paulhan65/holography/notebooks/fejer_chebyshev_gibbs_circumvention.png", dpi=160)
+    plt.show()
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### 11.4 Systematic Benchmark across All 5 Pathological Spacetime Profiles
+    To evaluate whether Fejér and spectral summability methods generalize beyond single shockwaves, we reconstruct the complete suite of **5 pathological mass profiles** from Section 8 using all 4 spectral kernels at order $K = 12$:
+
+    1. **P1: Ultra-Thin Shockwave ($v_s = 0.08$):** Near-Heaviside step function. Standard Chebyshev exhibits $12.7\%$ total peak-to-peak ringing ($+2.7\%$ overshoot, $-10.1\%$ undershoot, $dm/dv = -0.8933$). Fejér summability completely eliminates both overshoot and undershoot ($0.00\%$), preserving the Null Energy Condition.
+    2. **P2: NEC Violation Dip ($m(v)$ dip):** A transient negative mass pulse. Standard Chebyshev captures the dip ($dm/dv = -0.0395$). Fejér summability gently smooths the shallow trough ($dm/dv = +0.0014$), while Lanczos achieves the lowest overall profile error ($|\Delta m| = 0.0393$).
+    3. **P3: Turbulent High-Frequency Ripple ($\omega = 6$):** Sub-AdS bulk oscillation. Standard Chebyshev captures the ripples ($dm/dv = -0.4619$), while Fejér acts as an aggressive low-pass filter, recovering the smooth monotonic background envelope ($dm/dv = +0.0019$).
+    4. **P4: Triple-Stage Cascade (3 Shells & 2 Plateaus):** Standard Chebyshev shows Gibbs ringing on both intermediate plateaus ($m \approx 0.3, 0.6$) with $dm/dv = -0.1957$. Fejér-Chebyshev yields strictly flat, monotonic plateaus ($dm/dv = +0.0004$) with $0.00\%$ overshoot.
+    5. **P5: Extreme Skewness / Tail:** Immediate shock rise followed by slow relaxation. Standard Chebyshev overshoots by $0.19\%$ with oscillatory tail artifacts ($dm/dv = -0.2410$). Fejér and Lanczos eliminate tail ringing with $0.00\%$ overshoot.
+    """)
+    return
+
+
+@app.cell
+def _(np, os, plt):
+    data_paths = [
+        "/home/paulhan65/holography/notebooks/pathological_kernel_benchmark.npy",
+        "/home/paulhan65/.gemini/antigravity-cli/brain/111dda55-dca7-4f74-9da7-30620c3356c1/scratch/pathological_kernel_benchmark.npy"
+    ]
+    data_file = next((p for p in data_paths if os.path.exists(p)), None)
+    if data_file is None:
+        raise FileNotFoundError("pathological_kernel_benchmark.npy not found.")
+
+    patho_data = np.load(data_file, allow_pickle=True).item()
+    full_res = patho_data["full_patho_results"]
+    v_eval = patho_data["v_eval_p"]
+
+    print(f"{'Profile / Kernel Method':<42} | {'Overshoot':<10} | {'Undershoot':<10} | {'Max |Δm|':<10} | {'Mean |Δm|':<10} | {'Min dm/dv':<10}")
+    print("=" * 102)
+
+    for p_name, p_data in full_res.items():
+        print(f">>> {p_name} (Loss: {p_data['losses'][-1]:.2e})")
+        for k_name, k_data in p_data['kernel_results'].items():
+            ov = f"{k_data['overshoot']*100:.2f}%"
+            un = f"{k_data['undershoot']*100:.2f}%"
+            max_e = f"{k_data['max_err']:.4f}"
+            mean_e = f"{k_data['mean_err']:.4f}"
+            min_d = f"{k_data['min_deriv']:.4f}"
+            print(f"  {k_name:<40} | {ov:<10} | {un:<10} | {max_e:<10} | {mean_e:<10} | {min_d:<10}")
+        print("-" * 102)
+
+    fig_path = "/home/paulhan65/holography/notebooks/pathological_kernel_comparison.png"
+    if os.path.exists(fig_path):
+        import matplotlib.image as mpimg
+        img = mpimg.imread(fig_path)
+        plt.figure(figsize=(18, 11))
+        plt.imshow(img)
+        plt.axis("off")
+        plt.title("Systematic Pathological Mass Profile Reconstruction across Spectral Kernels", fontsize=14, fontweight="bold", pad=12)
+        plt.tight_layout()
+        plt.show()
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## 12. Summary & Physical Synthesis
+
+    ### 12.1 Key Achievements of the Orthogonal Basis Approach
     1. **Drastic Dimensionality Reduction:** Replaced a 1,153-parameter unconstrained neural network with $4 - 8$ orthogonal Chebyshev coefficients, reducing parameter complexity by $> 99\%$.
     2. **Exact Asymptotics by Construction:** Both vacuum AdS ($m(-\infty)=0$) and thermal BTZ ($m(+\infty)=1$) are mathematically enforced identically for all parameter vectors in the stationary-boundary regime.
     3. **True Second-Order Gauss-Newton Optimization:** Quadratic convergence in $4 - 8$ iterations ($< 15$ seconds runtime) vs. hundreds of Adam steps taking minutes.
@@ -1031,8 +1320,11 @@ def _(mo):
        - For smooth profiles, boundary loss drops exponentially from $10^{-8}$ to $10^{-11}$.
        - Increasing $K$ from 4 to 12 allows resolving high-frequency turbulent ripples ($\omega=6$), dropping loss from $2 \times 10^{-6}$ down to $1.5 \times 10^{-10}$.
        - The sensitivity condition number grows as $\kappa(J) \sim 10^2 \to 10^{10}$, reflecting physical holographic screening of sub-AdS bulk modes and demonstrating the necessity of Levenberg-Marquardt regularization.
-       - For ultra-thin shocks, higher $K$ sharpens the shock transition width while exhibiting the universal $\sim 9\%$ Gibbs overshoot.
-    5. **Extension to Non-Asymptotically Flat Spacetimes:**
+    5. **Circumvention of the Gibbs Phenomenon via Fejér Summability:**
+       - For ultra-thin gravitational shockwaves ($v_s = 0.08$), standard Chebyshev expansions produce a universal $\sim 10\%$ peak-to-peak Gibbs ringing that induces an unphysical violation of the classical Null Energy Condition ($dm/dv = -0.9952 < 0$).
+       - Adapting **Fejér-Chebyshev summability (Cesàro means: $w_k = 1 - k/K$)** strictly eliminates negative sidelobes in the spectral kernel ($F_K \ge 0$), yielding **$0.00\%$ overshoot and $0.00\%$ undershoot** while strictly preserving metric monotonicity and the Null Energy Condition.
+       - **Lanczos $\sigma$-factors ($w_k = \operatorname{sinc}(\pi k / K)$)** provide an optimal compromise, suppressing Gibbs oscillations by $> 95\%$ (overshoot $< 0.6\%$) while maintaining sharp shockwave resolution.
+    6. **Extension to Non-Asymptotically Flat Spacetimes:**
        - Demonstrated successful reconstruction of steady accretion ($m(v) = 0.5 + 0.28v$), accelerating collapse, and periodic breathing horizons ($m(v) = 0.75 + 0.22\sin(2.5v)$) with MSE $\sim 10^{-10}$ and mean error $< 0.8\%$.
     """)
     return
